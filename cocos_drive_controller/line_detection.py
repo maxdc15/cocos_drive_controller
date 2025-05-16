@@ -1,34 +1,18 @@
 #!/usr/bin/env python3
-# line_error_node.py
+
 import rclpy
 from rclpy.node import Node
 
-import cv2 as cv
-import numpy as np
+from sensor_msgs.msg import Image
 from std_msgs.msg import Float32
 
-
-def gstreamer_pipeline(
-    capture_width=400,
-    capture_height=300,
-    display_width=400,
-    display_height=300,
-    framerate=30,
-    flip_method=2,
-):
-    return (
-        f"nvarguscamerasrc ! "
-        f"video/x-raw(memory:NVMM), width=(int){capture_width}, height=(int){capture_height}, "
-        f"format=(string)NV12, framerate=(fraction){framerate}/1 ! "
-        f"nvvidconv flip-method={flip_method} ! "
-        f"video/x-raw, width=(int){display_width}, height=(int){display_height}, format=(string)BGRx ! "
-        f"videoconvert ! "
-        f"video/x-raw, format=(string)BGR ! appsink"
-    )
+import cv2 as cv
+import numpy as np
+from cv_bridge import CvBridge
 
 
 class LineErrorNode(Node):
-    """Detecta la línea, calcula error horizontal y lo publica en /line_error"""
+    """Detecta la línea desde una imagen de ROS y publica el error horizontal en /line_error"""
 
     def __init__(self):
         super().__init__('line_detection')
@@ -36,31 +20,26 @@ class LineErrorNode(Node):
         # ── parámetros configurables ───────────────────────────
         self.declare_parameter('thresh',        60)   # Umbral binarización
         self.declare_parameter('roi_height',   0.25)  # Fracción inferior a analizar
-        self.declare_parameter('rate',         30.0)  # [Hz]
 
         self.thresh      = self.get_parameter('thresh').value
         self.roi_height  = self.get_parameter('roi_height').value
-        self.dt          = 1.0 / self.get_parameter('rate').value
+
+        self.bridge = CvBridge()
 
         # Publisher
         self.pub_err = self.create_publisher(Float32, '/line_error', 10)
 
-        # Cámara Jetson
-        self.cap = cv.VideoCapture(0)
-        #self.cap = cv.VideoCapture(gstreamer_pipeline(), cv.CAP_GSTREAMER)
-        if not self.cap.isOpened():
-            self.get_logger().error('No se pudo abrir la cámara con GStreamer')
-            rclpy.shutdown()
-            raise RuntimeError('Camera open failed')
+        # Subscriber a las imágenes del tópico /video_source/raw
+        self.sub_img = self.create_subscription(Image, '/video_source/raw', self.image_callback, 10)
 
-        self.timer = self.create_timer(self.dt, self.process_frame)
-        self.get_logger().info('Nodo line_error_node iniciado')
+        self.get_logger().info('Nodo line_error_node iniciado con entrada desde /video_source/raw')
 
     # ──────────────────────────────────────────────────────────
-    def process_frame(self):
-        ret, frame = self.cap.read()
-        if not ret:
-            self.get_logger().warning('Frame no válido')
+    def image_callback(self, msg: Image):
+        try:
+            frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        except Exception as e:
+            self.get_logger().error(f'Error al convertir imagen: {e}')
             return
 
         h, w = frame.shape[:2]
@@ -81,9 +60,9 @@ class LineErrorNode(Node):
         cx = int(M['m10'] / M['m00'])           
         error_norm = (cx - w // 2) / (w // 2)  
 
-        msg = Float32()
-        msg.data = float(error_norm)
-        self.pub_err.publish(msg)
+        msg_err = Float32()
+        msg_err.data = float(error_norm)
+        self.pub_err.publish(msg_err)
 
         # # --- DEBUG opcional: comenta si no lo usas ---
         # cv.circle(roi, (cx, int(M['m01']/M['m00'])), 4, (0,255,0), -1)
@@ -95,7 +74,6 @@ class LineErrorNode(Node):
 
     # ──────────────────────────────────────────────────────────
     def destroy_node(self):
-        self.cap.release()
         cv.destroyAllWindows()
         super().destroy_node()
 
