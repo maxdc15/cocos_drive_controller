@@ -51,8 +51,8 @@ class ColorDetector(Node):
         # ── Máscaras HSV ────────────────────────────────────────
         masks = {
             'Red':    self._mask_red(hsv),
-            'Green':  cv2.inRange(hsv, (40,  40,  40), (85, 255, 255)),
-            'Yellow': cv2.inRange(hsv, (25, 50, 50), (38, 255, 255)),
+            'Green':  cv2.inRange(hsv, (45,  50,  50), (75, 255, 255)),
+            'Yellow': cv2.inRange(hsv, (20, 100, 100), (35, 255, 255)),
         }
 
         # Procesar cada color
@@ -75,16 +75,16 @@ class ColorDetector(Node):
             code = 3
         self.pub_color.publish(Int8(data=code))
 
-        # # ── Mostrar ventana ─────────────────────────────────────
-        # cv2.imshow("Color detector", frame)
-        # if cv2.waitKey(1) & 0xFF == ord('q'):
-        #     rclpy.shutdown()
+        # ── Mostrar ventana ─────────────────────────────────────
+        #cv2.imshow("Color detector", frame)
+        #if cv2.waitKey(1) & 0xFF == ord('q'):
+        #    rclpy.shutdown()
 
     # ── Máscara roja (dos rangos en HSV) ──────────────────────
     @staticmethod
     def _mask_red(hsv):
-        lower1 = cv2.inRange(hsv, (0,   10, 255), (4,   255, 255))
-        lower2 = cv2.inRange(hsv, (170, 10, 255), (180, 255, 255))
+        lower1 = cv2.inRange(hsv, (0,   137, 10), (8,   255, 255))
+        lower2 = cv2.inRange(hsv, (170, 137, 100), (180, 255, 255))
         return cv2.bitwise_or(lower1, lower2)
 
     # ── Procesa máscara, revisa contornos, dibuja si hay detección

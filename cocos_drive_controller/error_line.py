@@ -16,8 +16,8 @@ class LineErrorNode(Node):
 
         # Parameters
         self.declare_parameter('thresh',	60)
-        self.declare_parameter('roi_height',	0.20)
-        self.declare_parameter('roi_width', 	0.50)
+        self.declare_parameter('roi_height',	0.25)
+        self.declare_parameter('roi_width', 	0.5)
         self.declare_parameter('rate',		30.0)
 
         self.thresh	= self.get_parameter('thresh').value
@@ -73,9 +73,9 @@ class LineErrorNode(Node):
 
         #DEBUG 
         #cv.circle(roi, (cx, int(M['m01']/M['m00'])), 4, (0,255,0), -1)
-        #cv.putText(roi, f"err: {error_norm:+.2f}", (10,20), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255,0,0), 1)
+	    #cv.putText(roi, f"err: {error_norm:+.2f}", (10,20), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255,0,0), 1)
         #cv.imshow("ROI", roi)
-        #cv.waitKey(1)
+	    #cv.waitKey(1)
 
     def destroy_node(self):
         cv.destroyAllWindows()

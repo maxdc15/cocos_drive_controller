@@ -1,12 +1,16 @@
+#!/usr/bin/env python3
+
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool, Int8
 from enum import Enum, auto
 
+
 class StateFSM(Enum):
     FOLLOW_LINE = auto()
     REDUCE_VEL  = auto()
     STOP        = auto()
+
 
 class MainController(Node):
 
@@ -14,67 +18,68 @@ class MainController(Node):
         super().__init__("main_controller")
         self.get_logger().info("Nodo main_controller iniciado")
 
-        # ── Publishers ───────────────────────────────────────────
+        # ── Publishers ─────────────────────────────────────────
+        self.pub_follow_line = self.create_publisher(Bool, '/follow_line',       1)
+        self.pub_reduce      = self.create_publisher(Bool, '/reduce_velocity',   1)
+        self.pub_stop        = self.create_publisher(Bool, '/stop',              1)
 
-        self.pub_follow_line = self.create_publisher(Bool, '/follow_line', 1)
-        self.pub_stop        = self.create_publisher(Bool, '/stop',        1)
-        self.pub_reduce      = self.create_publisher(Bool, '/reduce_velocity', 1)
+        # ── Subscribers ───────────────────────────────────────
+        self.create_subscription(Bool, '/detected_color', self.detected_cb, 10)
+        self.create_subscription(Int8, '/color',          self.color_cb,    10)
 
-        # ── Subscribers ──────────────────────────────────────────
-
-        self.create_subscription(Bool, '/detected_color', self.detected_color_callback, 10)
-        self.create_subscription(Int8, '/color', self.color_callback, 10)
-
-        # ── Variables ───────────────────────────────────────────
-
-        self.detected_color = False
-        self.color = 0
+        # ── Variables ────────────────────────────────────────
+        self.detected_color = False   # True si la cámara ve un semáforo
+        self.color          = 0       # 0: nada, 1: rojo, 2: amarillo, 3: verde
         self.state          = StateFSM.FOLLOW_LINE
 
+        # Mensajes pre-alocados (evita crear objetos cada ciclo)
+        self.msg_f = Bool()
+        self.msg_r = Bool()
+        self.msg_s = Bool()
 
-        self.timer = self.create_timer(0.1, self.loop)   # 10 Hz
+        # Loop a 10 Hz
+        self.timer = self.create_timer(0.1, self.loop)
 
-
-    def detected_color_callback(self, msg):
+    # ── Callbacks ─────────────────────────────────────────────
+    def detected_cb(self, msg: Bool):
         self.detected_color = msg.data
 
-
-    def color_callback(self, msg):
+    def color_cb(self, msg: Int8):
         self.color = msg.data
 
+    # ── Lógica de la máquina de estados ──────────────────────
     def loop(self):
-        # Si estamos en STOP, solo salimos cuando venga verde
+        # 1) STOP → sólo sale con verde
         if self.state == StateFSM.STOP:
             if self.detected_color and self.color == 3:
                 self.state = StateFSM.FOLLOW_LINE
-            # si no, quedamos en STOP
 
-        else:
-            # Si detectamos señal, evaluamos color
+        # 2) REDUCE_VEL → permanece hasta ver rojo (luego STOP)
+        elif self.state == StateFSM.REDUCE_VEL:
+            if self.detected_color and self.color == 1:
+                self.state = StateFSM.STOP
+            # verde o ausencia de señal NO cambian este estado
+
+        # 3) FOLLOW_LINE → reacciona a rojo y amarillo
+        else:  # self.state == FOLLOW_LINE
             if self.detected_color:
-                if self.color == 1:
+                if   self.color == 1:
                     self.state = StateFSM.STOP
                 elif self.color == 2:
                     self.state = StateFSM.REDUCE_VEL
-                elif self.color == 3:
-                    self.state = StateFSM.FOLLOW_LINE
-                else:
-                    self.state = StateFSM.FOLLOW_LINE
-            else:
-                # sin señal → sigue línea
-                self.state = StateFSM.FOLLOW_LINE
+                # verde o colores desconocidos: sigue igual
 
-        # Publicar los tres flags (solo uno true)
-        msg_f = Bool(); msg_r = Bool(); msg_s = Bool()
-        msg_f.data = (self.state == StateFSM.FOLLOW_LINE)
-        msg_r.data = (self.state == StateFSM.REDUCE_VEL)
-        msg_s.data = (self.state == StateFSM.STOP)
+        # ── Publicar flags ────────────────────────────────────
+        self.msg_f.data = self.state == StateFSM.FOLLOW_LINE
+        self.msg_r.data = self.state == StateFSM.REDUCE_VEL
+        self.msg_s.data = self.state == StateFSM.STOP
 
-        self.pub_follow_line.publish(msg_f)
-        self.pub_reduce.publish(msg_r)
-        self.pub_stop.publish(msg_s)
+        self.pub_follow_line.publish(self.msg_f)
+        self.pub_reduce.publish(self.msg_r)
+        self.pub_stop.publish(self.msg_s)
 
 
+# ── Main ─────────────────────────────────────────────────────
 def main(args=None):
     rclpy.init(args=args)
     node = MainController()
@@ -82,9 +87,6 @@ def main(args=None):
     node.destroy_node()
     rclpy.shutdown()
 
+
 if __name__ == '__main__':
     main()
-
-        
-
-        

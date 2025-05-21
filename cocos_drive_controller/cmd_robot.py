@@ -18,9 +18,9 @@ class CmdRobotNode(Node):
         self.get_logger().info('Nodo cmd_robot_node iniciado')
 
         # ── Parámetros ───────────────────────────────────────────
-        self.declare_parameter('v_max',     0.18)
+        self.declare_parameter('v_max',     0.20)
         self.declare_parameter('v_min',     0.05)
-        self.declare_parameter('kp_ang',    0.6)
+        self.declare_parameter('kp_ang',    0.8)
         self.declare_parameter('threshold', 0.05)
         self.declare_parameter('timeout',   0.5)
         self.declare_parameter('rate',     50.0)
